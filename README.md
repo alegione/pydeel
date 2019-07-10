@@ -2,7 +2,7 @@
 
 # Overview
 
-This program is a basic python conversion of Mick Watson's Ideel. It reads one or more input FASTA files and for each file it will use prodigal for rapid annotation, then run diamond blast, then compare the query length to hit length.
+This program is a basic python conversion of Mick Watson's [Ideel](https://github.com/mw55309/ideel). It reads one or more input FASTA files and for each file it will use prodigal for rapid annotation, then run diamond blast, then compare the query length to hit length.
 
 It was built with the help of '[Bionitio](https://github.com/bionitio-team/bionitio)'
 
