@@ -19,6 +19,7 @@ import logging
 import pkg_resources
 import pandas
 import altair
+import seaborn
 import datetime
 #from Bio import SeqIO
 
@@ -104,6 +105,8 @@ def parse_args(prefix):
     if args.code < 1 or args.code > 25:
         print('--code must be between 1 and 25 (inclusive)')
         exit
+    else:
+        args.code = str(args.code)
 
     # Change some arguments to full paths.
 
@@ -114,8 +117,8 @@ def parse_args(prefix):
     else:
         print(args.database, 'does not exist!')
         exit
-    
-    
+
+
     if args.input:
         args.input = os.path.abspath(args.input)
 
@@ -147,6 +150,7 @@ def init_logging(log_filename):
         logging.info('command line: %s', ' '.join(sys.argv))
 
 
+
 def run_prodigal(input_file, gcode, protein_file):
     '''
     Runs the annotation tool prodigal on the input fasta file, saves the output
@@ -166,26 +170,30 @@ def make_diamond_db(database):
                     "-d", database])
 
 def run_diamond(database, protein_file, lengths_file):
-
-    subprocess.run(["diamond", "blastp",
+    format = str("6 slen qlen")
+    print(format)
+    print(format.strip('"\''))
+    print("running:", "diamond", "blastp",
                     "--threads", "8",
                     "--max-target-seqs", "1",
                     "--db", database,
                     "--query", protein_file,
-                    "--outfmt", "6 qseqid qstart qend qlen sseqid sacc sstart \
-                    send slen pident evalue staxids sscinames scomnames sblastnames stitle",
-                    "--out", lengths_file])
+                    "--outfmt", "6 slen qlen",
+                    "--out", lengths_file)
+    command = "diamond blastp --threads 8 --max-target-seqs 1 --outfmt 6 qseqid qstart qend qlen sseqid sstart send slen nident pident evalue stitle qtitle --db " + database + " --query " + protein_file + " --out " + lengths_file
+    subprocess.run(command, shell = True)
+    #subprocess.run(["diamond", "blastp --outfmt 6 slen qlen", "--threads", "8", "--max-target-seqs", "1", "--db", database, "--query", protein_file, "--out", lengths_file], shell = True)
 
 
-def convert_dataframe(lengths_data):
+def convert_dataframe(lengths_data, convert_output):
     # import the diamond blast output file as a pandas dataframe, add headings
     df = pandas.read_csv(lengths_data,
                         sep = "\t",
                         names = ["qseqid", "qstart", "qend", "qlen", "sseqid", \
-                        "sacc", "sstart", "send", "slen", "pident", "evalue", \
-                        "staxids", "sscinames", "scomnames", "sblastnames", \
-                        "stitle"])
+                        "sstart", "send", "slen", "nident", "pident", "evalue", \
+                        "stitle", "qtitle"])
     # the 'slen' value is always one less than the query because database doesn't include stop codons
+    df.head()
     df['slen'] = df['slen'] + 1
 
     # add a value for the query length divided by the sequence length)
@@ -195,12 +203,15 @@ def convert_dataframe(lengths_data):
     df['geneNumber'] = df.index + 1
 
     #Finished with the file, time to write it back to the original location
-    pandas.df.to_csv(lengths_data, sep = "\t", header = True)
+    df.to_csv(convert_output, sep = "\t", header = True)
 
 def plot_ratio(lengths_data, fullpath):
+    lengths_data = pandas.read_csv(lengths_data,
+                        sep = "\t")
+
     hist = altair.Chart(lengths_data)\
         .mark_bar(clip = True)\
-        .encode(x = altair.X('codingRatio',
+        .encode(x = altair.X('codingRatio:Q',
                              bin = altair.Bin(step = 0.1),
                              scale = altair.Scale(domain=(0, 2)),
                              axis = altair.Axis(title='Query/Reference Ratio')
@@ -213,7 +224,7 @@ def plot_ratio(lengths_data, fullpath):
 
     histzoom = altair.Chart(lengths_data)\
     .mark_bar(clip = True)\
-    .encode(x = altair.X('codingRatio',
+    .encode(x = altair.X('codingRatio:Q',
                          bin = altair.Bin(step = 0.1),
                          scale = altair.Scale(domain=(0, 2)),
                          axis = altair.Axis(title='Query/Reference Ratio')
@@ -228,18 +239,52 @@ def plot_ratio(lengths_data, fullpath):
 
     genomeRatio = altair.Chart(lengths_data)\
     .mark_line(clip = True)\
-    .encode(x = altair.X('geneNumber',
-                         scale = altair.Scale(domain = (0, len(lengths_data.index)))
+    .encode(x = altair.X('geneNumber:Q',
+                         scale = altair.Scale(domain = (0, len('geneNumber')))
                         ),
-            y = altair.Y('codingRatio',
+            y = altair.Y('codingRatio:Q',
                         scale = altair.Scale(type = 'log')),
-            tooltip = 'codingRatio')\
+            tooltip = 'codingRatio:Q')\
     .interactive()
 
     # save outputs
+    print("saving image files")
     hist.save(fullpath + '-ratioplot-full' + '.html')
     histzoom.save(fullpath + '-ratioplot-zoom' + '.html')
     genomeRatio.save(fullpath + '-ratioplot-genome' + '.html')
+    
+    return None
+
+def plot_ratio_seaborn(lengths_data, fullpath):
+    lengths_data = pandas.read_csv(lengths_data,
+                        sep = "\t")
+    #Draw a plot of ratios
+    seaborn.set_style(style = "ticks")
+    hist = seaborn.distplot(lengths_data['codingRatio'],
+                            hist = True,
+                            hist_kws = {"color":"red"}
+                            )
+                            
+    fig = hist.get_figure()
+    fig.savefig(fullpath + '-seaborn.png') 
+    
+# =============================================================================
+#     hist = altair.Chart(lengths_data)\
+#         .mark_bar(clip = True)\
+#         .encode(x = altair.X('codingRatio:Q',
+#                              bin = altair.Bin(step = 0.1),
+#                              scale = altair.Scale(domain=(0, 2)),
+#                              axis = altair.Axis(title='Query/Reference Ratio')
+#                             ),
+#                 y = 'count()',
+#                tooltip = 'count()')\
+#         .configure_mark(
+#             fill = 'red',
+#             stroke = 'black')
+#     
+# =============================================================================
+    #save plot
+    return None
 
 def main():
     '''
@@ -248,42 +293,56 @@ def main():
     time=datetime.datetime.now()
     prefix = time.strftime("%Y%m%d-%H%M%S")
     options = parse_args(prefix)
-    # Create target Directory if don't exist
-    if not os.path.exists(options.outdir):
-        os.mkdir(options.outdir)
-        print("Directory " , options.outdir ,  " Created ")
-    else:
-        exit_with_error(print("Directory " , options.outdir ,  " already exists"), EXIT_OUTDIR_EXISTS_ERROR)
+
+    # # Create target Directory if don't exist
+    # if not os.path.exists(options.outdir):
+    #     os.mkdir(options.outdir)
+    #     print("Directory " , options.outdir ,  " Created ")
+    # else:
+    #     exit_with_error(print("Directory" , options.outdir ,  "already exists"), EXIT_OUTDIR_EXISTS_ERROR)
 
     init_logging(options.log)
 
 
     #    if options.database is not None
-    
-    fullpath = options.outdir + options.title
-    
-    
+
+    fullpath = options.outdir + "/" + options.title
+
+
     protein_file = fullpath + '.faa'
+
+    print("input file:", options.input)
+    print("output directory:", options.outdir)
+    print("prefix:", options.title)
+    print("genetic code:", options.code)
+
     if not os.path.exists(protein_file):
         run_prodigal(options.input, options.code, protein_file)
     else:
         print(protein_file, 'detected, skipping prodigal')
-    
+
     lengths_file = fullpath + '.tsv'
     if not os.path.exists(lengths_file):
         run_diamond(options.database, protein_file, lengths_file)
     else:
         print(lengths_file, 'detected, skipping diamond blast')
-        
     
-    convert_dataframe(lengths_file)
+    #error occurs if tsv has already been converted
+    pandas_file = fullpath + '-pandas.tsv'
+    if not os.path.exists(pandas_file):
+        print("converting dataframe from diamond to pandas")
+        convert_dataframe(lengths_file, pandas_file)
+    else:
+        print(pandas_file, 'detected, skipping data conversion')
+
     
-    
-    plot_ratio(lengths_file, fullpath)
-    
-    
-    
-    
+    print("plotting coding ratios")
+    plot_ratio(pandas_file, fullpath)
+    plot_ratio_seaborn(pandas_file, fullpath)
+
+
+
+
 
 
 # If this script is run from the command line then call the main function.
