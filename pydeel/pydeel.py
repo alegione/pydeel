@@ -6,15 +6,16 @@ License     : MIT
 Maintainer  : legionea@unimelb.edu.au
 Portability : POSIX
 
-The program is a basic python coversion of Mick Watson's Ideel.
+This program is a basic python coversion of Mick Watson's Ideel.
 It reads one or more input FASTA files and for each file it will use
 prodigal for rapid annotation, then run diamond blast, then compare the
 query length to hit length.
+
+It was built with the help of 'Bionitio'
 '''
 
 import argparse
 import os
-#from math import floor
 import sys
 import subprocess
 import logging
@@ -22,6 +23,7 @@ import pkg_resources
 import pandas
 import altair
 import seaborn
+import selenium
 import datetime
 #from Bio import SeqIO
 
