@@ -6,8 +6,10 @@ License     : MIT
 Maintainer  : legionea@unimelb.edu.au
 Portability : POSIX
 
-The program reads one or more input FASTA files. For each file it computes a
-variety of statistics, and then prints a summary of the statistics as output.
+The program is a basic python coversion of Mick Watson's Ideel.
+It reads one or more input FASTA files and for each file it will use
+prodigal for rapid annotation, then run diamond blast, then compare the
+query length to hit length.
 '''
 
 import argparse
@@ -252,7 +254,7 @@ def plot_ratio(lengths_data, fullpath):
     hist.save(fullpath + '-ratioplot-full' + '.html')
     histzoom.save(fullpath + '-ratioplot-zoom' + '.html')
     genomeRatio.save(fullpath + '-ratioplot-genome' + '.html')
-    
+
     return None
 
 def plot_ratio_seaborn(lengths_data, fullpath):
@@ -264,10 +266,10 @@ def plot_ratio_seaborn(lengths_data, fullpath):
                             hist = True,
                             hist_kws = {"color":"red"}
                             )
-                            
+
     fig = hist.get_figure()
-    fig.savefig(fullpath + '-seaborn.png') 
-    
+    fig.savefig(fullpath + '-seaborn.png')
+
 # =============================================================================
 #     hist = altair.Chart(lengths_data)\
 #         .mark_bar(clip = True)\
@@ -281,7 +283,7 @@ def plot_ratio_seaborn(lengths_data, fullpath):
 #         .configure_mark(
 #             fill = 'red',
 #             stroke = 'black')
-#     
+#
 # =============================================================================
     #save plot
     return None
@@ -326,7 +328,7 @@ def main():
         run_diamond(options.database, protein_file, lengths_file)
     else:
         print(lengths_file, 'detected, skipping diamond blast')
-    
+
     #error occurs if tsv has already been converted
     pandas_file = fullpath + '-pandas.tsv'
     if not os.path.exists(pandas_file):
@@ -335,7 +337,7 @@ def main():
     else:
         print(pandas_file, 'detected, skipping data conversion')
 
-    
+
     print("plotting coding ratios")
     plot_ratio(pandas_file, fullpath)
     plot_ratio_seaborn(pandas_file, fullpath)
