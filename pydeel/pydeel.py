@@ -6,7 +6,7 @@ License     : MIT
 Maintainer  : legionea@unimelb.edu.au
 Portability : POSIX
 
-This program is a basic python coversion of Mick Watson's Ideel.
+This program is a basic python conversion of Mick Watson's Ideel.
 It reads one or more input FASTA files and for each file it will use
 prodigal for rapid annotation, then run diamond blast, then compare the
 query length to hit length.
@@ -21,12 +21,12 @@ import subprocess
 import logging
 import pkg_resources
 import pandas
-import altair
-import seaborn
+#import seaborn
 import selenium
 import datetime
 #from Bio import SeqIO
 
+import Convert2fasta
 
 EXIT_FILE_IO_ERROR = 1
 EXIT_COMMAND_LINE_ERROR = 2
@@ -71,17 +71,17 @@ def parse_args(prefix):
     #                     default=DEFAULT_MIN_LEN,
     #                     help='Minimum length sequence to include in stats (default {})'.format(DEFAULT_MIN_LEN))
     parser.add_argument('--version',
-                        action='version',
-                        version='%(prog)s ' + PROGRAM_VERSION)
+                        action = 'version',
+                        version = '%(prog)s ' + PROGRAM_VERSION)
     parser.add_argument('--log',
-                        metavar='LOG_FILE',
-                        type=str,
-                        help='record program progress in LOG_FILE, will be saved in outdir')
+                        metavar = 'LOG_FILE',
+                        type = str,
+                        help = 'record program progress in LOG_FILE, will be saved in outdir')
     parser.add_argument('-i', '--input',
-                        required=True,
-                        metavar='Path/to/input.fasta',
-                        type=str,
-                        help='File containing sequence, either in fasta format to be annotated, or pre-annotated gff or gbk')
+                        required = True,
+                        metavar = 'Path/to/input.fasta',
+                        type = str,
+                        help = 'File containing sequence, either in fasta format to be annotated or pre-annotated gbk or faa')
     parser.add_argument('-c', '--code',
                         required = False,
                         default = 11,
@@ -90,9 +90,9 @@ def parse_args(prefix):
                         metavar = 11,
                         help = 'Translation table for input sequence (default: 11)')
     parser.add_argument('-d', '--database',
-                        metavar='Uniprot.dmnd',
-                        type=str,
-                        help='Protein database in diamond format')
+                        metavar = 'Uniprot.dmnd',
+                        type = str,
+                        help = 'Protein database in diamond format')
     parser.add_argument('-o', '--outdir',
                         required = True,
                         type = str,
@@ -102,8 +102,14 @@ def parse_args(prefix):
                         required = False,
                         default = 'pydeel',
                         type = str,
-                        help='Prefix/title for files (default: "' + prefix + '-pydeel")')
-
+                        help = 'Prefix/title for files (default: "' + prefix + '-pydeel")')
+    parser.add_argument('-p', '--proteins',
+                        metavar = 'Path/to/RefProtein.faa',
+                        required = False,
+                        type = str,
+                        default = None,
+                        help = 'Input protein reference to compare annotations against'
+                        )
     args = parser.parse_args()
 
     if args.code < 1 or args.code > 25:
@@ -127,10 +133,6 @@ def parse_args(prefix):
         args.input = os.path.abspath(args.input)
 
     return args
-
-
-
-
 
 def init_logging(log_filename):
     '''If the log_filename is defined, then
@@ -166,28 +168,19 @@ def run_prodigal(input_file, gcode, protein_file):
                     "-i", input_file,
                     "-g", gcode,
                     "-a", protein_file])
+    return None
 
-
-def make_diamond_db(database):
+def make_diamond_db(proteins, output_file):
     subprocess.run(["diamond", "makedb",
-                    "--in", database,
-                    "-d", database])
+                    "--in", proteins,
+                    "--db", output_file])
+    return None
 
 def run_diamond(database, protein_file, lengths_file):
-    format = str("6 slen qlen")
-    print(format)
-    print(format.strip('"\''))
-    print("running:", "diamond", "blastp",
-                    "--threads", "8",
-                    "--max-target-seqs", "1",
-                    "--db", database,
-                    "--query", protein_file,
-                    "--outfmt", "6 slen qlen",
-                    "--out", lengths_file)
-    command = "diamond blastp --threads 8 --max-target-seqs 1 --outfmt 6 qseqid qstart qend qlen sseqid sstart send slen nident pident evalue stitle qtitle --db " + database + " --query " + protein_file + " --out " + lengths_file
-    subprocess.run(command, shell = True)
-    #subprocess.run(["diamond", "blastp --outfmt 6 slen qlen", "--threads", "8", "--max-target-seqs", "1", "--db", database, "--query", protein_file, "--out", lengths_file], shell = True)
-
+    dmnd_command = "diamond blastp --quiet --threads 8 --max-target-seqs 1 --outfmt 6 qseqid qstart qend qlen sseqid sstart send slen nident pident evalue stitle qtitle --db " + database + " --query " + protein_file + " --out " + lengths_file
+    print("running:", dmnd_command)
+    subprocess.run(dmnd_command, shell = True)
+    return None
 
 def convert_dataframe(lengths_data, convert_output):
     # import the diamond blast output file as a pandas dataframe, add headings
@@ -196,8 +189,8 @@ def convert_dataframe(lengths_data, convert_output):
                         names = ["qseqid", "qstart", "qend", "qlen", "sseqid", \
                         "sstart", "send", "slen", "nident", "pident", "evalue", \
                         "stitle", "qtitle"])
+
     # the 'slen' value is always one less than the query because database doesn't include stop codons
-    df.head()
     df['slen'] = df['slen'] + 1
 
     # add a value for the query length divided by the sequence length)
@@ -208,6 +201,8 @@ def convert_dataframe(lengths_data, convert_output):
 
     #Finished with the file, time to write it back to the original location
     df.to_csv(convert_output, sep = "\t", header = True)
+
+    return None
 
 def plot_ratio(lengths_data, fullpath):
     lengths_data = pandas.read_csv(lengths_data,
@@ -252,43 +247,31 @@ def plot_ratio(lengths_data, fullpath):
     .interactive()
 
     # save outputs
-    print("saving image files")
+    print("Saving image files to html")
     hist.save(fullpath + '-ratioplot-full' + '.html')
     histzoom.save(fullpath + '-ratioplot-zoom' + '.html')
     genomeRatio.save(fullpath + '-ratioplot-genome' + '.html')
 
+    print("Saving image files to png")
+    hist.save(fullpath + '-ratioplot-full' + '.png')
+    histzoom.save(fullpath + '-ratioplot-zoom' + '.png')
+    genomeRatio.save(fullpath + '-ratioplot-genome' + '.png')
+
     return None
 
-def plot_ratio_seaborn(lengths_data, fullpath):
-    lengths_data = pandas.read_csv(lengths_data,
-                        sep = "\t")
-    #Draw a plot of ratios
-    seaborn.set_style(style = "ticks")
-    hist = seaborn.distplot(lengths_data['codingRatio'],
-                            hist = True,
-                            hist_kws = {"color":"red"}
-                            )
-
-    fig = hist.get_figure()
-    fig.savefig(fullpath + '-seaborn.png')
-
-# =============================================================================
-#     hist = altair.Chart(lengths_data)\
-#         .mark_bar(clip = True)\
-#         .encode(x = altair.X('codingRatio:Q',
-#                              bin = altair.Bin(step = 0.1),
-#                              scale = altair.Scale(domain=(0, 2)),
-#                              axis = altair.Axis(title='Query/Reference Ratio')
-#                             ),
-#                 y = 'count()',
-#                tooltip = 'count()')\
-#         .configure_mark(
-#             fill = 'red',
-#             stroke = 'black')
+# def plot_ratio_seaborn(lengths_data, fullpath):
+#     lengths_data = pandas.read_csv(lengths_data,
+#                         sep = "\t")
+#     #Draw a plot of ratios
+#     seaborn.set_style(style = "ticks")
+#     hist = seaborn.distplot(lengths_data['codingRatio'],
+#                             hist = True,
+#                             hist_kws = {"color":"red"}
+#                             )
 #
-# =============================================================================
-    #save plot
-    return None
+#     fig = hist.get_figure()
+#     fig.savefig(fullpath + '-seaborn.png')
+#     return None
 
 def main():
     '''
@@ -312,13 +295,21 @@ def main():
 
     fullpath = options.outdir + "/" + options.title
 
-
     protein_file = fullpath + '.faa'
 
+
     print("input file:", options.input)
-    print("output directory:", options.outdir)
     print("prefix:", options.title)
     print("genetic code:", options.code)
+
+    #check if file is FASTA or gbk and convert if necessary
+
+    if options.proteins is not None:
+        database = options.proteins + '.dmnd'
+        if not os.path.exists(database)
+            make_diamond_db(options.proteins, database)
+    else:
+        database = options.database
 
     if not os.path.exists(protein_file):
         run_prodigal(options.input, options.code, protein_file)
@@ -327,7 +318,7 @@ def main():
 
     lengths_file = fullpath + '.tsv'
     if not os.path.exists(lengths_file):
-        run_diamond(options.database, protein_file, lengths_file)
+        run_diamond(database, protein_file, lengths_file)
     else:
         print(lengths_file, 'detected, skipping diamond blast')
 
@@ -342,9 +333,7 @@ def main():
 
     print("plotting coding ratios")
     plot_ratio(pandas_file, fullpath)
-    plot_ratio_seaborn(pandas_file, fullpath)
-
-
+#    plot_ratio_seaborn(pandas_file, fullpath)
 
 
 
