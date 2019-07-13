@@ -14,18 +14,20 @@ query length to hit length.
 It was built with the help of 'Bionitio'
 '''
 
+import altair
 import argparse
-import os
-import sys
-import subprocess
-import logging
-import pkg_resources
-import pandas
-#import seaborn
-import selenium
-import datetime
 #from Bio import SeqIO
+import datetime
+import logging
+import os
+import pandas
+import pkg_resources
+#import seaborn
+#import selenium # doesn't need to be imported??
+import subprocess
+import sys
 
+#Local modules
 import Convert2fasta
 
 EXIT_FILE_IO_ERROR = 1
@@ -92,6 +94,7 @@ def parse_args(prefix):
     parser.add_argument('-d', '--database',
                         metavar = 'Uniprot.dmnd',
                         type = str,
+                        default = None,
                         help = 'Protein database in diamond format')
     parser.add_argument('-o', '--outdir',
                         required = True,
@@ -110,6 +113,15 @@ def parse_args(prefix):
                         default = None,
                         help = 'Input protein reference to compare annotations against'
                         )
+    parser.add_argument('-f','--force',
+                        required = False,
+                        action='store_true',
+                        help = 'Overwrite any directories/files with the same names present at the target'
+                        )
+    parser.add_argument('-r', '--resume',
+                        required = False,
+                        action = 'store_true',
+                        help = 'Continue run where last completed')
     args = parser.parse_args()
 
     if args.code < 1 or args.code > 25:
@@ -121,12 +133,26 @@ def parse_args(prefix):
     # Change some arguments to full paths.
 
     args.outdir = os.path.abspath(args.outdir)
-
-    if os.path.exists(args.database):
-        args.database = os.path.abspath(args.database)
-    else:
-        print(args.database, 'does not exist!')
+    
+    if args.database is not None and args.proteins is not None:
+        print('Please only provide one of --database or --proteins, not both')
         exit
+    elif args.database is not None and os.path.exists(args.database):
+        args.database = os.path.abspath(args.database)
+        print('database:', args.database)
+    elif args.proteins is not None and os.path.exists(args.proteins):
+        args.proteins = os.path.abspath(args.proteins)
+        print('proteins:', args.proteins)
+    else:
+        if args.database is not None:
+            print(args.database, 'does not exist!')
+            exit
+        elif args.proteins is not None:
+            print(args.proteins, 'does not exist!')
+            exit
+        else:
+            print("I'm not sure how I got here")
+            exit
 
 
     if args.input:
@@ -273,58 +299,84 @@ def plot_ratio(lengths_data, fullpath):
 #     fig.savefig(fullpath + '-seaborn.png')
 #     return None
 
+
+#TODO: Basic stats that can also be used for unit testing
+    
+'''
+def pydeel_stats(lengths_data):
+    #Run some stats?
+    lengths_data = pandas.read_csv(lengths_data,
+                        sep = "\t")
+    
+    count_orfs = len(lengths_data) - 1
+    # average_ratio = 
+    # full length orfs
+    # full length divided by 'count_orfs'
+
+''' 
+
 def main():
     '''
     Orchestrate the execution of the program
     '''
+    
     time=datetime.datetime.now()
     prefix = time.strftime("%Y%m%d-%H%M%S")
     options = parse_args(prefix)
-
-    # # Create target Directory if don't exist
-    # if not os.path.exists(options.outdir):
-    #     os.mkdir(options.outdir)
-    #     print("Directory " , options.outdir ,  " Created ")
-    # else:
-    #     exit_with_error(print("Directory" , options.outdir ,  "already exists"), EXIT_OUTDIR_EXISTS_ERROR)
-
+    
     init_logging(options.log)
+    
+    # Replace target directory if it exists and 'force' set
+    if os.path.exists(options.outdir) and options.force == True:
+        os.rmdir(options.outdir)
+        print("Directory", options.outdir,  "will be replaced")
+    
+    # Create target Directory if doesn't exist
+    if not os.path.exists(options.outdir):
+         os.mkdir(options.outdir)
+         print("Directory", options.outdir, "Created")
+    elif os.path.exists(options.outdir) and options.resume == False:
+         exit_with_error(print("Directory", options.outdir, "already exists"), EXIT_OUTDIR_EXISTS_ERROR)
+    else:
+        print("Directory", options.outdir, "exists. Resuming workflow")
 
+    
 
-    #    if options.database is not None
 
     fullpath = options.outdir + "/" + options.title
 
     protein_file = fullpath + '.faa'
 
-
     print("input file:", options.input)
     print("prefix:", options.title)
     print("genetic code:", options.code)
 
-    #check if file is FASTA or gbk and convert if necessary
+    #TODO: check if file is FASTA or gbk and convert if necessary
 
     if options.proteins is not None:
-        database = options.proteins + '.dmnd'
-        if not os.path.exists(database)
-            make_diamond_db(options.proteins, database)
+        ref_protein = options.proteins
+        ref_database = ref_protein.split('.', 1) + '.dmnd'
+        if not os.path.exists(ref_database) or options.force == True:
+            make_diamond_db(ref_protein, ref_database)
     else:
-        database = options.database
+        ref_database = options.database
 
-    if not os.path.exists(protein_file):
+    if not os.path.exists(protein_file) or options.force == True:
+        print('Running prodigal on', options.input, 'using genetic code #', options.code)
         run_prodigal(options.input, options.code, protein_file)
     else:
         print(protein_file, 'detected, skipping prodigal')
 
     lengths_file = fullpath + '.tsv'
-    if not os.path.exists(lengths_file):
-        run_diamond(database, protein_file, lengths_file)
+    if not os.path.exists(lengths_file) or options.force == True:
+        print('Running Diamond BLAST on generated open reading frames')
+        run_diamond(ref_database, protein_file, lengths_file)
     else:
         print(lengths_file, 'detected, skipping diamond blast')
 
     #error occurs if tsv has already been converted
     pandas_file = fullpath + '-pandas.tsv'
-    if not os.path.exists(pandas_file):
+    if not os.path.exists(pandas_file) or options.force == True:
         print("converting dataframe from diamond to pandas")
         convert_dataframe(lengths_file, pandas_file)
     else:
@@ -332,7 +384,8 @@ def main():
 
 
     print("plotting coding ratios")
-    plot_ratio(pandas_file, fullpath)
+    if not os.path.exists(fullpath + '-ratioplot-genome' + '.png') or options.force == True:
+        plot_ratio(pandas_file, fullpath)
 #    plot_ratio_seaborn(pandas_file, fullpath)
 
 

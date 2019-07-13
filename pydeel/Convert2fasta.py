@@ -17,7 +17,7 @@ def gbkToFasta(gbk_filename, fasta_filename):
     output_handle = open(fasta_filename, "w")
 
     for seq_record in SeqIO.parse(input_handle, "genbank") :
-        print "Converting GenBank record %s to FASTA" % seq_record.id
+        print("Converting GenBank record %s to FASTA" % seq_record.id)
         output_handle.write(">%s %s\n%s\n" % (
                seq_record.id,
                seq_record.description,
@@ -34,8 +34,8 @@ def gbkTofaa(gbk_filename, faa_filename):
 
     output_handle = open(faa_filename, "w")
 
-    for seq_feature in seq_record.features :
-        if seq_feature.type=="CDS" :
+    for seq_feature in seq_record.features:
+        if seq_feature.type=="CDS":
             assert len(seq_feature.qualifiers['translation'])==1
             output_handle.write(">%s from %s\n%s\n" % (
                    seq_feature.qualifiers['locus_tag'][0],
@@ -47,9 +47,6 @@ def gbkTofaa(gbk_filename, faa_filename):
     input_handle.close()
 
     return None
-
-
-def main():
 
 
 if __name__ == '__main__':
