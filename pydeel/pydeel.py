@@ -122,6 +122,7 @@ def parse_args(prefix):
                         required = False,
                         action = 'store_true',
                         help = 'Continue run where last completed')
+# TODO: add option to NOT output png files directory to avoid need for selenium and chromedriver
     args = parser.parse_args()
 
     if args.code < 1 or args.code > 25:
@@ -133,7 +134,7 @@ def parse_args(prefix):
     # Change some arguments to full paths.
 
     args.outdir = os.path.abspath(args.outdir)
-    
+
     if args.database is not None and args.proteins is not None:
         print('Please only provide one of --database or --proteins, not both')
         exit
@@ -190,6 +191,7 @@ def run_prodigal(input_file, gcode, protein_file):
     '''
     print('Running prodigal on', input_file)
     print('Saving prodigal results to', protein_file)
+    #TODO: Add quiet mode?
     subprocess.run(["prodigal",
                     "-i", input_file,
                     "-g", gcode,
@@ -279,9 +281,9 @@ def plot_ratio(lengths_data, fullpath):
     genomeRatio.save(fullpath + '-ratioplot-genome' + '.html')
 
     print("Saving image files to png")
-    hist.save(fullpath + '-ratioplot-full' + '.png')
-    histzoom.save(fullpath + '-ratioplot-zoom' + '.png')
-    genomeRatio.save(fullpath + '-ratioplot-genome' + '.png')
+    hist.save(fullpath + '-ratioplot-full' + '.png', webdriver='firefox')
+    histzoom.save(fullpath + '-ratioplot-zoom' + '.png', webdriver='firefox')
+    genomeRatio.save(fullpath + '-ratioplot-genome' + '.png', webdriver='firefox')
 
     return None
 
@@ -301,36 +303,39 @@ def plot_ratio(lengths_data, fullpath):
 
 
 #TODO: Basic stats that can also be used for unit testing
-    
+
 '''
 def pydeel_stats(lengths_data):
     #Run some stats?
     lengths_data = pandas.read_csv(lengths_data,
                         sep = "\t")
-    
+
     count_orfs = len(lengths_data) - 1
-    # average_ratio = 
+    # average_ratio =
     # full length orfs
     # full length divided by 'count_orfs'
 
-''' 
+'''
 
 def main():
     '''
     Orchestrate the execution of the program
     '''
-    
+
     time=datetime.datetime.now()
     prefix = time.strftime("%Y%m%d-%H%M%S")
     options = parse_args(prefix)
-    
+
     init_logging(options.log)
-    
+
     # Replace target directory if it exists and 'force' set
     if os.path.exists(options.outdir) and options.force == True:
-        os.rmdir(options.outdir)
+
+
+        import shutil
+        shutil.rmtree(options.outdir, ignore_errors=True)
         print("Directory", options.outdir,  "will be replaced")
-    
+
     # Create target Directory if doesn't exist
     if not os.path.exists(options.outdir):
          os.mkdir(options.outdir)
@@ -340,7 +345,7 @@ def main():
     else:
         print("Directory", options.outdir, "exists. Resuming workflow")
 
-    
+
 
 
     fullpath = options.outdir + "/" + options.title
@@ -355,7 +360,7 @@ def main():
 
     if options.proteins is not None:
         ref_protein = options.proteins
-        ref_database = ref_protein.split('.', 1) + '.dmnd'
+        ref_database = str(ref_protein.split('.', 1)[0]) + '.dmnd'
         if not os.path.exists(ref_database) or options.force == True:
             make_diamond_db(ref_protein, ref_database)
     else:
