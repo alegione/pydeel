@@ -27,6 +27,5 @@ setup(
     license='LICENSE',
     description=('Assembly completion by annotation assessment'),
     long_description=(LONG_DESCRIPTION),
-    install_requires=["argparse", "os", "sys", "subprocess", "logging",
-    "pkg_resources", "pandas", "altair", "seaborn", "selenium", "datetime"],
+    install_requires=["argparse", "pandas", "altair", "seaborn", "selenium", "datetime"],
 )
