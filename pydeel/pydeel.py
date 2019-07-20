@@ -28,7 +28,7 @@ import subprocess
 import sys
 
 #Local modules
-import Convert2fasta
+#import Convert2fasta
 
 EXIT_FILE_IO_ERROR = 1
 EXIT_COMMAND_LINE_ERROR = 2
