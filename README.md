@@ -18,12 +18,7 @@ Clone this repository:
 git clone https://github.com/alegione/pydeel
 ```
 
-Move into the repository directory:
-```
-cd pydeel
-```
-
-Pydeel can be installed using `pip` in a variety of ways (`$` indicates the command line prompt):
+Pydeel can be installed using `pip` in a variety of ways:
 
 1. Inside a virtual environment:
 ```
@@ -93,8 +88,8 @@ Pydeel returns the following exit status values:
 ## Unit tests
 
 ```
-$ cd pydeel/python/pydeel
-$ python -m unittest -v pydeel_test
+cd pydeel/python/pydeel
+python -m unittest -v pydeel_test
 ```
 
 ## Test suite
