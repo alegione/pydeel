@@ -280,10 +280,10 @@ def plot_ratio(lengths_data, fullpath):
     histzoom.save(fullpath + '-ratioplot-zoom' + '.html')
     genomeRatio.save(fullpath + '-ratioplot-genome' + '.html')
 
-    print("Saving image files to png")
-    hist.save(fullpath + '-ratioplot-full' + '.png', webdriver='firefox')
-    histzoom.save(fullpath + '-ratioplot-zoom' + '.png', webdriver='firefox')
-    genomeRatio.save(fullpath + '-ratioplot-genome' + '.png', webdriver='firefox')
+#    print("Saving image files to png")
+#    hist.save(fullpath + '-ratioplot-full' + '.png', webdriver='firefox')
+#    histzoom.save(fullpath + '-ratioplot-zoom' + '.png', webdriver='firefox')
+#    genomeRatio.save(fullpath + '-ratioplot-genome' + '.png', webdriver='firefox')
 
     return None
 
