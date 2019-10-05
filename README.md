@@ -83,6 +83,7 @@ Pydeel returns the following exit status values:
 * 3: Input FASTA file is invalid. This can occur if pydeel can read an input file but the file format is invalid.
 * 4: Output directory exists already and cannot be overwritten
 
+<!--
 # Testing
 
 ## Unit tests
@@ -96,6 +97,7 @@ python -m unittest -v pydeel_test
 
 A set of sample test input files is provided in the `test_data` folder.
 
+-->
 # Bug reporting and feature requests
 
 Please submit bug reports and feature requests to the issue tracker on GitHub:
