@@ -15,7 +15,7 @@ It was built with the help of 'Bionitio'
 
 setup(
     name='pydeel',
-    version='0.1.0.0',
+    version='0.2.0.0',
     author='Alistair Legione',
     author_email='legionea@unimelb.edu.au',
     packages=['pydeel'],
@@ -27,5 +27,5 @@ setup(
     license='LICENSE',
     description=('Assembly completion by annotation assessment'),
     long_description=(LONG_DESCRIPTION),
-    install_requires=["argparse", "pandas", "altair", "seaborn", "selenium", "datetime"],
+    install_requires=["argparse", "pandas", "altair", "seaborn", "selenium", "datetime", "Bio"],
 )

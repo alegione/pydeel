@@ -34,9 +34,7 @@ EXIT_FILE_IO_ERROR = 1
 EXIT_COMMAND_LINE_ERROR = 2
 EXIT_FASTA_FILE_ERROR = 3
 EXIT_OUTDIR_EXISTS_ERROR = 4
-#DEFAULT_MIN_LEN = 0
 DEFAULT_VERBOSE = False
-#HEADER = 'FILENAME\tNUMSEQ\tTOTAL\tMIN\tAVG\tMAX'
 PROGRAM_NAME = "pydeel"
 
 
@@ -67,18 +65,9 @@ def parse_args(prefix):
     '''
     description = 'Pydeel: a tool to investigate bacterial or viral genome assembly based on protein lengths. Provide a fasta file and protein database as input and pydeel will provide gene completeness ratios'
     parser = argparse.ArgumentParser(description=description)
-    # parser.add_argument('--minlen',
-    #                     metavar='N',
-    #                     type=int,
-    #                     default=DEFAULT_MIN_LEN,
-    #                     help='Minimum length sequence to include in stats (default {})'.format(DEFAULT_MIN_LEN))
     parser.add_argument('--version',
                         action = 'version',
                         version = '%(prog)s ' + PROGRAM_VERSION)
-    # parser.add_argument('--log',
-    #                     type = Bool,
-    #                     action = 'store_true',
-    #                     help = 'record program progress in logfile, will be saved in outdir (default = True)')
     parser.add_argument('-i', '--input',
                         required = True,
                         metavar = 'Path/to/input.fasta',
