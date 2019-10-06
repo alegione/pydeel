@@ -16,7 +16,7 @@ It was built with the help of 'Bionitio'
 
 import altair
 import argparse
-#from Bio import SeqIO
+from Bio import SeqIO
 import datetime
 import logging
 import os
@@ -181,6 +181,15 @@ def init_logging(log_filename):
 
         logging.info('Program started')
         logging.info('Command line: %s', ' '.join(sys.argv))
+
+
+def is_fasta(filename):
+    '''
+    taken from a helpful stackoverflow comment (https://stackoverflow.com/questions/44293407/how-can-i-check-whether-a-given-file-is-fasta)
+    '''
+    with open(filename, "r") as handle:
+        fasta = SeqIO.parse(handle, "fasta")
+        return any(fasta)  # False when `fasta` is empty, i.e. wasn't a FASTA file
 
 
 
@@ -369,27 +378,37 @@ def main():
     else:
         ref_database = options.database
 
-    fullpath = options.outdir + "/" + options.name
-
-    protein_file = fullpath + '.faa'
-
 
     if os.path.isdir(options.input) == True:
         input_data = os.listdir(options.input)
+        multi = True
     else:
         input_data = [options.input]
+        multi = False
 
     for sequence in input_data:
+        if multi == True:
+            sequence = os.path.abspath(options.input + "/" + sequence)
+
+        else:
+            sequence = os.path.abspath(options.input)
+        # check if input is a fasta file
+        if is_fasta(sequence) == False:
+            continue
         #TODO: check if file is FASTA or gbk and convert if necessary
-        print(sequence)
+
+        full_outpath = options.outdir + "/" + options.name + "_" + os.path.splitext(os.path.basename(sequence))[0]
+
+        protein_file = full_outpath + '.faa'
+
         if not os.path.exists(protein_file) or options.force == True:
             logging.info('Running prodigal on %s using genetic code #%s', sequence, options.code)
-            prodigal_output = fullpath + '.prodigal.txt'
+            prodigal_output = full_outpath + '.prodigal.txt'
             run_prodigal(sequence, options.code, protein_file, prodigal_output)
         else:
             logging.info("%s detected, skipping prodigal", protein_file)
 
-        lengths_file = fullpath + '.tsv'
+        lengths_file = full_outpath + '.tsv'
         if not os.path.exists(lengths_file) or options.force == True:
             logging.info('Running Diamond BLAST on generated open reading frames')
             run_diamond(ref_database, protein_file, lengths_file)
@@ -397,7 +416,7 @@ def main():
             logging.info("%s detected, skipping diamond blast", lengths_file)
 
         #error occurs if tsv has already been converted
-        pandas_file = fullpath + '-pandas.tsv'
+        pandas_file = full_outpath + '-pandas.tsv'
         if not os.path.exists(pandas_file) or options.force == True:
             logging.info("converting dataframe from diamond to pandas")
             convert_dataframe(lengths_file, pandas_file)
@@ -406,9 +425,9 @@ def main():
 
 
         logging.info("plotting coding ratios")
-        if not os.path.exists(fullpath + '-ratioplot-genome' + '.png') or options.force == True:
-            plot_ratio(pandas_file, fullpath)
-    #    plot_ratio_seaborn(pandas_file, fullpath)
+        if not os.path.exists(full_outpath + '-ratioplot-genome' + '.png') or options.force == True:
+            plot_ratio(pandas_file, full_outpath)
+    #    plot_ratio_seaborn(pandas_file, full_outpath)
 
 
 
