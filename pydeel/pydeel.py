@@ -16,7 +16,7 @@ It was built with the help of 'Bionitio'
 
 import altair
 import argparse
-#from Bio import SeqIO
+from Bio import SeqIO
 import datetime
 import logging
 import os
@@ -34,9 +34,7 @@ EXIT_FILE_IO_ERROR = 1
 EXIT_COMMAND_LINE_ERROR = 2
 EXIT_FASTA_FILE_ERROR = 3
 EXIT_OUTDIR_EXISTS_ERROR = 4
-#DEFAULT_MIN_LEN = 0
 DEFAULT_VERBOSE = False
-#HEADER = 'FILENAME\tNUMSEQ\tTOTAL\tMIN\tAVG\tMAX'
 PROGRAM_NAME = "pydeel"
 
 
@@ -67,23 +65,14 @@ def parse_args(prefix):
     '''
     description = 'Pydeel: a tool to investigate bacterial or viral genome assembly based on protein lengths. Provide a fasta file and protein database as input and pydeel will provide gene completeness ratios'
     parser = argparse.ArgumentParser(description=description)
-    # parser.add_argument('--minlen',
-    #                     metavar='N',
-    #                     type=int,
-    #                     default=DEFAULT_MIN_LEN,
-    #                     help='Minimum length sequence to include in stats (default {})'.format(DEFAULT_MIN_LEN))
     parser.add_argument('--version',
                         action = 'version',
                         version = '%(prog)s ' + PROGRAM_VERSION)
-    parser.add_argument('--log',
-                        metavar = 'LOG_FILE',
-                        type = str,
-                        help = 'record program progress in LOG_FILE, will be saved in outdir')
     parser.add_argument('-i', '--input',
                         required = True,
                         metavar = 'Path/to/input.fasta',
                         type = str,
-                        help = 'File containing sequence, either in fasta format to be annotated or pre-annotated gbk or faa')
+                        help = 'File (or directory) containing sequence, either in fasta format to be annotated or pre-annotated faa')
     parser.add_argument('-c', '--code',
                         required = False,
                         default = 11,
@@ -101,11 +90,11 @@ def parse_args(prefix):
                         type = str,
                         metavar = 'Path/to/output',
                         help = 'Name of output directory (required)')
-    parser.add_argument('-t', '--title',
+    parser.add_argument('-n', '--name',
                         required = False,
                         default = 'pydeel',
                         type = str,
-                        help = 'Prefix/title for files (default: "' + prefix + '-pydeel")')
+                        help = 'Prefix/name for files (default: "YYYYMMDD-hhmmss-pydeel")')
     parser.add_argument('-p', '--proteins',
                         metavar = 'Path/to/RefProtein.faa',
                         required = False,
@@ -122,12 +111,13 @@ def parse_args(prefix):
                         required = False,
                         action = 'store_true',
                         help = 'Continue run where last completed')
+    
 # TODO: add option to NOT output png files directory to avoid need for selenium and chromedriver
     args = parser.parse_args()
 
     if args.code < 1 or args.code > 25:
-        print('--code must be between 1 and 25 (inclusive)')
-        exit
+        Error = '--code must be between 1 and 25 (inclusive)'
+        exit_with_error(Error, EXIT_COMMAND_LINE_ERROR)
     else:
         args.code = str(args.code)
 
@@ -136,25 +126,24 @@ def parse_args(prefix):
     args.outdir = os.path.abspath(args.outdir)
 
     if args.database is not None and args.proteins is not None:
-        print('Please only provide one of --database or --proteins, not both')
-        exit
+        Error = "Please only provide one of --database or --proteins, not both"
+        exit_with_error(Error, EXIT_COMMAND_LINE_ERROR)
     elif args.database is not None and os.path.exists(args.database):
         args.database = os.path.abspath(args.database)
-        print('database:', args.database)
+        print("database:", args.database)
     elif args.proteins is not None and os.path.exists(args.proteins):
         args.proteins = os.path.abspath(args.proteins)
-        print('proteins:', args.proteins)
+        print("proteins:", args.proteins)
     else:
         if args.database is not None:
-            print(args.database, 'does not exist!')
-            exit
+            Error = args.database + " does not exist!"
+            exit_with_error(Error, EXIT_COMMAND_LINE_ERROR)
         elif args.proteins is not None:
-            print(args.proteins, 'does not exist!')
-            exit
+            Error = args.proteins + " does not exist!"
+            exit_with_error(Error, EXIT_COMMAND_LINE_ERROR)
         else:
-            print("I'm not sure how I got here")
-            exit
-
+            Error = "I'm not sure how I got here"
+            exit_with_error(Error, EXIT_COMMAND_LINE_ERROR)
 
     if args.input:
         args.input = os.path.abspath(args.input)
@@ -162,8 +151,7 @@ def parse_args(prefix):
     return args
 
 def init_logging(log_filename):
-    '''If the log_filename is defined, then
-    initialise the logging facility, and write log statement
+    '''Initialise the logging facility, and write log statement
     indicating the program has started, and also write out the
     command line from sys.argv
 
@@ -179,39 +167,64 @@ def init_logging(log_filename):
                             filemode='w',
                             format='%(asctime)s %(levelname)s - %(message)s',
                             datefmt='%m-%d-%Y %H:%M:%S')
-        logging.info('program started')
-        logging.info('command line: %s', ' '.join(sys.argv))
+        logging.getLogger().addHandler(logging.StreamHandler())
+
+        logging.info('Program started')
+        logging.info('Command line: %s', ' '.join(sys.argv))
+
+
+def is_fasta(filename):
+    '''
+    taken from a helpful stackoverflow comment (https://stackoverflow.com/questions/44293407/how-can-i-check-whether-a-given-file-is-fasta)
+    '''
+    with open(filename, "r") as handle:
+        fasta = SeqIO.parse(handle, "fasta")
+        return any(fasta)  # False when `fasta` is empty, i.e. wasn't a FASTA file
 
 
 
-def run_prodigal(input_file, gcode, protein_file):
+def run_prodigal(input_file, gcode, protein_file, output_file):
     '''
     Runs the annotation tool prodigal on the input fasta file, saves the output
     to an .faa file
     '''
-    print('Running prodigal on', input_file)
-    print('Saving prodigal results to', protein_file)
-    #TODO: Add quiet mode?
+    logging.info('Running prodigal on %s', input_file)
     subprocess.run(["prodigal",
                     "-i", input_file,
                     "-g", gcode,
-                    "-a", protein_file])
+                    "-a", protein_file,
+                    "-o", output_file])
+    ## TODO: add a check here to see if the file was actually made
+    logging.info('Saved prodigal results to %s', protein_file)
+
+
     return None
 
 def make_diamond_db(proteins, output_file):
+    logging.info("Building diamond database from %s protein database", proteins)
+
     subprocess.run(["diamond", "makedb",
                     "--in", proteins,
-                    "--db", output_file])
+                    "--db", output_file,
+                    "--quiet"])
+    ## TODO: add a check here to see if the file was actually made
+    logging.info("Saved database to %s", output_file)
     return None
 
 def run_diamond(database, protein_file, lengths_file):
-    dmnd_command = "diamond blastp --quiet --threads 8 --max-target-seqs 1 --outfmt 6 qseqid qstart qend qlen sseqid sstart send slen nident pident evalue stitle qtitle --db " + database + " --query " + protein_file + " --out " + lengths_file
-    print("running:", dmnd_command)
+    logging.info("Running diamond on %s against %s to generate lengths ratio", protein_file, database)
+    dmnd_command = "diamond blastp --quiet --threads 8 --max-target-seqs 1 --outfmt 6 qseqid qstart qend qlen sseqid sstart send slen nident pident evalue stitle qtitle --db " \
+                    + database \
+                    + " --query " + protein_file + \
+                    " --out " + lengths_file
+    logging.info("diamond command: %s", str(dmnd_command))
     subprocess.run(dmnd_command, shell = True)
     return None
 
 def convert_dataframe(lengths_data, convert_output):
     # import the diamond blast output file as a pandas dataframe, add headings
+    logging.info('Loading diamond results to pandas dataframe and outputting %s', convert_output)
+
     df = pandas.read_csv(lengths_data,
                         sep = "\t",
                         names = ["qseqid", "qstart", "qend", "qlen", "sseqid", \
@@ -233,6 +246,8 @@ def convert_dataframe(lengths_data, convert_output):
     return None
 
 def plot_ratio(lengths_data, fullpath):
+    logging.info("Generating plots")
+
     lengths_data = pandas.read_csv(lengths_data,
                         sep = "\t")
 
@@ -275,7 +290,7 @@ def plot_ratio(lengths_data, fullpath):
     .interactive()
 
     # save outputs
-    print("Saving image files to html")
+    logging.info("Saving image files to html")
     hist.save(fullpath + '-ratioplot-full' + '.html')
     histzoom.save(fullpath + '-ratioplot-zoom' + '.html')
     genomeRatio.save(fullpath + '-ratioplot-genome' + '.html')
@@ -325,38 +340,25 @@ def main():
     time=datetime.datetime.now()
     prefix = time.strftime("%Y%m%d-%H%M%S")
     options = parse_args(prefix)
-
-    init_logging(options.log)
+    logfile = options.outdir + "/" + options.name + ".log"
 
     # Replace target directory if it exists and 'force' set
     if os.path.exists(options.outdir) and options.force == True:
-
-
         import shutil
         shutil.rmtree(options.outdir, ignore_errors=True)
         print("Directory", options.outdir,  "will be replaced")
 
-    # Create target Directory if doesn't exist
+    # Create target directory
     if not os.path.exists(options.outdir):
          os.mkdir(options.outdir)
-         print("Directory", options.outdir, "Created")
+         init_logging(logfile)
+
+         logging.info("Directory %s created", options.outdir)
     elif os.path.exists(options.outdir) and options.resume == False:
-         exit_with_error(print("Directory", options.outdir, "already exists"), EXIT_OUTDIR_EXISTS_ERROR)
+         exit_with_error(logging.info("Directory %s already exists", options.outdir), EXIT_OUTDIR_EXISTS_ERROR)
     else:
-        print("Directory", options.outdir, "exists. Resuming workflow")
+        logging.info("Directory %s exists. Resuming workflow", options.outdir)
 
-
-
-
-    fullpath = options.outdir + "/" + options.title
-
-    protein_file = fullpath + '.faa'
-
-    print("input file:", options.input)
-    print("prefix:", options.title)
-    print("genetic code:", options.code)
-
-    #TODO: check if file is FASTA or gbk and convert if necessary
 
     if options.proteins is not None:
         ref_protein = options.proteins
@@ -366,32 +368,56 @@ def main():
     else:
         ref_database = options.database
 
-    if not os.path.exists(protein_file) or options.force == True:
-        print('Running prodigal on', options.input, 'using genetic code #', options.code)
-        run_prodigal(options.input, options.code, protein_file)
+
+    if os.path.isdir(options.input) == True:
+        input_data = os.listdir(options.input)
+        multi = True
     else:
-        print(protein_file, 'detected, skipping prodigal')
+        input_data = [options.input]
+        multi = False
 
-    lengths_file = fullpath + '.tsv'
-    if not os.path.exists(lengths_file) or options.force == True:
-        print('Running Diamond BLAST on generated open reading frames')
-        run_diamond(ref_database, protein_file, lengths_file)
-    else:
-        print(lengths_file, 'detected, skipping diamond blast')
+    for sequence in input_data:
+        if multi == True:
+            sequence = os.path.abspath(options.input + "/" + sequence)
 
-    #error occurs if tsv has already been converted
-    pandas_file = fullpath + '-pandas.tsv'
-    if not os.path.exists(pandas_file) or options.force == True:
-        print("converting dataframe from diamond to pandas")
-        convert_dataframe(lengths_file, pandas_file)
-    else:
-        print(pandas_file, 'detected, skipping data conversion')
+        else:
+            sequence = os.path.abspath(options.input)
+        # check if input is a fasta file
+        if is_fasta(sequence) == False:
+            continue
+        #TODO: check if file is FASTA or gbk and convert if necessary
+
+        full_outpath = options.outdir + "/" + options.name + "_" + os.path.splitext(os.path.basename(sequence))[0]
+
+        protein_file = full_outpath + '.faa'
+
+        if not os.path.exists(protein_file) or options.force == True:
+            logging.info('Running prodigal on %s using genetic code #%s', sequence, options.code)
+            prodigal_output = full_outpath + '.prodigal.txt'
+            run_prodigal(sequence, options.code, protein_file, prodigal_output)
+        else:
+            logging.info("%s detected, skipping prodigal", protein_file)
+
+        lengths_file = full_outpath + '.tsv'
+        if not os.path.exists(lengths_file) or options.force == True:
+            logging.info('Running Diamond BLAST on generated open reading frames')
+            run_diamond(ref_database, protein_file, lengths_file)
+        else:
+            logging.info("%s detected, skipping diamond blast", lengths_file)
+
+        #error occurs if tsv has already been converted
+        pandas_file = full_outpath + '-pandas.tsv'
+        if not os.path.exists(pandas_file) or options.force == True:
+            logging.info("converting dataframe from diamond to pandas")
+            convert_dataframe(lengths_file, pandas_file)
+        else:
+            logging.info("%s detected, skipping data conversion", pandas_file)
 
 
-    print("plotting coding ratios")
-    if not os.path.exists(fullpath + '-ratioplot-genome' + '.png') or options.force == True:
-        plot_ratio(pandas_file, fullpath)
-#    plot_ratio_seaborn(pandas_file, fullpath)
+        logging.info("plotting coding ratios")
+        if not os.path.exists(full_outpath + '-ratioplot-genome' + '.png') or options.force == True:
+            plot_ratio(pandas_file, full_outpath)
+    #    plot_ratio_seaborn(pandas_file, full_outpath)
 
 
 
@@ -399,133 +425,3 @@ def main():
 # If this script is run from the command line then call the main function.
 if __name__ == '__main__':
     main()
-
-
-# class FastaStats(object):
-#     '''Compute various statistics for a FASTA file:
-#
-#     num_seqs: the number of sequences in the file satisfying the minimum
-#        length requirement (minlen_threshold).
-#     num_bases: the total length of all the counted sequences.
-#     min_len: the minimum length of the counted sequences.
-#     max_len: the maximum length of the counted sequences.
-#     average: the average length of the counted sequences rounded down
-#        to an integer.
-#     '''
-#     #pylint: disable=too-many-arguments
-#     def __init__(self,
-#                  num_seqs=None,
-#                  num_bases=None,
-#                  min_len=None,
-#                  max_len=None,
-#                  average=None):
-#         "Build an empty FastaStats object"
-#         self.num_seqs = num_seqs
-#         self.num_bases = num_bases
-#         self.min_len = min_len
-#         self.max_len = max_len
-#         self.average = average
-#
-#     def __eq__(self, other):
-#         "Two FastaStats objects are equal if their attributes are equal"
-#         if type(other) is type(self):
-#             return self.__dict__ == other.__dict__
-#         return False
-#
-#     def __repr__(self):
-#         "Generate a printable representation of a FastaStats object"
-#         return "FastaStats(num_seqs={}, num_bases={}, min_len={}, max_len={}, " \
-#             "average={})".format(
-#                 self.num_seqs, self.num_bases, self.min_len, self.max_len,
-#                 self.average)
-#
-#     def from_file(self, fasta_file, minlen_threshold=DEFAULT_MIN_LEN):
-#         '''Compute a FastaStats object from an input FASTA file.
-#
-#         Arguments:
-#            fasta_file: an open file object for the FASTA file
-#            minlen_threshold: the minimum length sequence to consider in
-#               computing the statistics. Sequences in the input FASTA file
-#               which have a length less than this value are ignored and not
-#               considered in the resulting statistics.
-#         Result:
-#            A FastaStats object
-#         '''
-#         num_seqs = num_bases = 0
-#         min_len = max_len = None
-#         for seq in SeqIO.parse(fasta_file, "fasta"):
-#             this_len = len(seq)
-#             if this_len >= minlen_threshold:
-#                 if num_seqs == 0:
-#                     min_len = max_len = this_len
-#                 else:
-#                     min_len = min(this_len, min_len)
-#                     max_len = max(this_len, max_len)
-#                 num_seqs += 1
-#                 num_bases += this_len
-#         if num_seqs > 0:
-#             self.average = int(floor(float(num_bases) / num_seqs))
-#         else:
-#             self.average = None
-#         self.num_seqs = num_seqs
-#         self.num_bases = num_bases
-#         self.min_len = min_len
-#         self.max_len = max_len
-#         return self
-#
-#     def pretty(self, filename):
-#         '''Generate a pretty printable representation of a FastaStats object
-#         suitable for output of the program. The output is a tab-delimited
-#         string containing the filename of the input FASTA file followed by
-#         the attributes of the object. If 0 sequences were read from the FASTA
-#         file then num_seqs and num_bases are output as 0, and min_len, average
-#         and max_len are output as a dash "-".
-#
-#         Arguments:
-#            filename: the name of the input FASTA file
-#         Result:
-#            A string suitable for pretty printed output
-#         '''
-#         if self.num_seqs > 0:
-#             num_seqs = str(self.num_seqs)
-#             num_bases = str(self.num_bases)
-#             min_len = str(self.min_len)
-#             average = str(self.average)
-#             max_len = str(self.max_len)
-#         else:
-#             num_seqs = num_bases = "0"
-#             min_len = average = max_len = "-"
-#         return "\t".join([filename, num_seqs, num_bases, min_len, average,
-#                           max_len])
-#
-#
-#
-#
-#
-#
-#
-# def process_files(options):
-#     '''Compute and print FastaStats for each input FASTA file specified on the
-#     command line. If no FASTA files are specified on the command line then
-#     read from the standard input (stdin).
-#
-#     Arguments:
-#        options: the command line options of the program
-#     Result:
-#        None
-#     '''
-#     if options.fasta_files:
-#         for fasta_filename in options.fasta_files:
-#             logging.info("Processing FASTA file from %s", fasta_filename)
-#             try:
-#                 fasta_file = open(fasta_filename)
-#             except IOError as exception:
-#                 exit_with_error(str(exception), EXIT_FILE_IO_ERROR)
-#             else:
-#                 with fasta_file:
-#                     stats = FastaStats().from_file(fasta_file, options.minlen)
-#                     print(stats.pretty(fasta_filename))
-#     else:
-#         logging.info("Processing FASTA file from stdin")
-#         stats = FastaStats().from_file(sys.stdin, options.minlen)
-#         print(stats.pretty("stdin"))
