@@ -17,6 +17,8 @@ It was built with the help of 'Bionitio'
 import altair
 import argparse
 from Bio import SeqIO
+import numpy
+import statsmodels.stats.api as sms
 import datetime
 import logging
 import os
@@ -111,7 +113,19 @@ def parse_args(prefix):
                         required = False,
                         action = 'store_true',
                         help = 'Continue run where last completed')
-    
+    parser.add_argument('--single',
+                        required = False,
+                        type = float,
+                        default = 0.90,
+                        help = 'Report pass/fail of single gene ratios'
+                        )
+    parser.add_argument('--group',
+                        required = False,
+                        type = float,
+                        default = 0.20,
+                        help = 'Report pass/fail of genome based on proportion of genes that fail individual test'
+                        )
+
 # TODO: add option to NOT output png files directory to avoid need for selenium and chromedriver
     args = parser.parse_args()
 
@@ -221,7 +235,7 @@ def run_diamond(database, protein_file, lengths_file):
     subprocess.run(dmnd_command, shell = True)
     return None
 
-def convert_dataframe(lengths_data, convert_output):
+def convert_dataframe(lengths_data, convert_output, single_threshold):
     # import the diamond blast output file as a pandas dataframe, add headings
     logging.info('Loading diamond results to pandas dataframe and outputting %s', convert_output)
 
@@ -236,6 +250,9 @@ def convert_dataframe(lengths_data, convert_output):
 
     # add a value for the query length divided by the sequence length)
     df['codingRatio'] = df['qlen'] / df['slen']
+
+    # add a pass/fail to each ORF depending on the provided threshold
+    df = df.assign(ORF_pass = numpy.where(df['codingRatio'] >= single_threshold, 'yes', 'no'))
 
     # add a 'gene number', assumes proteins were searched in order
     df['geneNumber'] = df.index + 1
@@ -280,7 +297,7 @@ def plot_ratio(lengths_data, fullpath):
         stroke = 'black')
 
     genomeRatio = altair.Chart(lengths_data)\
-    .mark_line(clip = True)\
+    .mark_line()\
     .encode(x = altair.X('geneNumber:Q',
                          scale = altair.Scale(domain = (0, len('geneNumber')))
                         ),
@@ -289,11 +306,34 @@ def plot_ratio(lengths_data, fullpath):
             tooltip = 'codingRatio:Q')\
     .interactive()
 
+    # violin = altair.Chart(lengths_data) \
+    #     .transform_bin(['bin_max', 'bin_min'], field='codingRatio', bin=altair.Bin(maxbins=20)) \
+    #     .transform_calculate(binned=(altair.datum.bin_max + altair.datum.bin_min) / 2) \
+    #     .transform_aggregate(value_count='count()', groupby=['qseqid', 'binned']) \
+    #     .transform_impute(impute='value_count', groupby=['qseqid'], key='binned', value=0) \
+    #     .mark_area( interpolate='monotone',
+    #                 orient='horizontal') \
+    #     .encode(x=altair.X('value_count:Q',
+    #                         title=None,
+    #                         stack='center',
+    #                         axis=altair.Axis(labels=False, values=[0],grid=False, ticks=True),
+    #                         ),
+    #             y=altair.Y('binned:Q', bin='binned', title='Coding Ratio'),
+    #             color=altair.Color('qseqid:N', legend=None),
+    #             column=altair.Column('qseqid:N',
+    #                 header=altair.Header(titleOrient='bottom',
+    #                                     labelOrient='bottom',
+    #                                     labelPadding=0,
+    #                                     ),
+    #                                 )) \
+    #     .interactive()
+
     # save outputs
     logging.info("Saving image files to html")
     hist.save(fullpath + '-ratioplot-full' + '.html')
     histzoom.save(fullpath + '-ratioplot-zoom' + '.html')
     genomeRatio.save(fullpath + '-ratioplot-genome' + '.html')
+    # violin.save(fullpath + '-codingRatioViolin' + '.html')
 
 #    print("Saving image files to png")
 #    hist.save(fullpath + '-ratioplot-full' + '.png', webdriver='firefox')
@@ -319,18 +359,37 @@ def plot_ratio(lengths_data, fullpath):
 
 #TODO: Basic stats that can also be used for unit testing
 
-'''
-def pydeel_stats(lengths_data):
+
+def genome_stats(lengths_data, single_threshold, group_threshold):
     #Run some stats?
+    title = os.path.splitext(os.path.basename(lengths_data))[0]
     lengths_data = pandas.read_csv(lengths_data,
                         sep = "\t")
-
-    count_orfs = len(lengths_data) - 1
-    # average_ratio =
-    # full length orfs
     # full length divided by 'count_orfs'
 
-'''
+    count_orfs = len(lengths_data)
+    average_ratio = numpy.average(lengths_data['codingRatio'])
+    perfect_orfs_count = (lengths_data.codingRatio.values == 1).sum()
+    perfect_orfs_percent = perfect_orfs_count / count_orfs
+    below_singleThres_count = len(lengths_data[lengths_data.ORF_pass.str.contains("no")])
+    below_singleThres_percent = below_singleThres_count / count_orfs
+    q25, median, q75 = numpy.percentile(lengths_data.codingRatio, [25, 50, 75])
+    min = numpy.min(lengths_data.codingRatio)
+    max = numpy.max(lengths_data.codingRatio)
+    std = numpy.std(lengths_data.codingRatio)
+    lower, upper = sms.DescrStatsW(lengths_data.codingRatio).tconfint_mean()
+    if below_singleThres_percent > group_threshold:
+        pass_group_threshold = False
+    else:
+        pass_group_threshold = True
+    results = [title, count_orfs, perfect_orfs_count, perfect_orfs_percent * 100, \
+                below_singleThres_count, below_singleThres_percent * 100, pass_group_threshold, \
+                average_ratio, std, lower, upper, min, q25, median, q75, max]
+    print(results)
+    return results
+
+
+
 
 def main():
     '''
@@ -376,6 +435,8 @@ def main():
         input_data = [options.input]
         multi = False
 
+    annotation_stats = options.outdir + "/" + options.name + "_annotation_stats.tsv"
+
     for sequence in input_data:
         if multi == True:
             sequence = os.path.abspath(options.input + "/" + sequence)
@@ -409,9 +470,24 @@ def main():
         pandas_file = full_outpath + '-pandas.tsv'
         if not os.path.exists(pandas_file) or options.force == True:
             logging.info("converting dataframe from diamond to pandas")
-            convert_dataframe(lengths_file, pandas_file)
+            convert_dataframe(lengths_file, pandas_file, options.single)
         else:
             logging.info("%s detected, skipping data conversion", pandas_file)
+
+            # need to set up to overwrite old file if running with --force, if added to the if statement it overwrites every loop
+        if not os.path.exists(annotation_stats):
+            logging.info("Creating statistics file")
+            genome_stat_df = pandas.DataFrame([genome_stats(pandas_file, options.single, options.group)], columns = ['title', 'count_orfs', 'perfect_orfs', 'perfect_orfs_%', 'below_' + str(options.single), 'below_' + str(options.single) + '_%', 'Pass_' + str(options.group) + '_threshold', \
+                        'average_ratio', 'Standard Deviation', '95% CI lower', '95% CI upper', 'Minimum', 'Q25', 'median', 'Q75', 'Max'])
+            genome_stat_df.to_csv(annotation_stats, index = False, sep = '\t', columns = ["title", "count_orfs", "perfect_orfs", "perfect_orfs_%", "below_" + str(options.single), "below_" + str(options.single) + "_%", "Pass_" + str(options.group) + "_threshold", \
+                        "average_ratio", "Standard Deviation", "95% CI lower", "95% CI upper", "Minimum", "Q25", "median", "Q75", "Max"])
+        else:
+            logging.info("Appending annotation stats to existing file")
+            genome_stat_df = pandas.DataFrame([genome_stats(pandas_file, options.single, options.group)], columns = ['title', 'count_orfs', 'perfect_orfs', 'perfect_orfs_%', 'below_' + str(options.single), 'below_' + str(options.single) + '_%', 'Pass_' + str(options.group) + '_threshold', \
+                        'average_ratio', 'Standard Deviation', '95% CI lower', '95% CI upper', 'Minimum', 'Q25', 'median', 'Q75', 'Max'])
+            old_file = pandas.read_csv(annotation_stats, sep = '\t')
+            new_file = old_file.append(genome_stat_df, ignore_index = True, sort = False)
+            new_file.to_csv(annotation_stats, sep = '\t', index = False)
 
 
         logging.info("plotting coding ratios")

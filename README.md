@@ -47,8 +47,8 @@ Pydeel can display usage information on the command line via the `-h` or `--help
 
 ```
 pydeel.py -h
-usage: pydeel.py [-h] [--version] [--log LOG_FILE] -i Path/to/input.fasta
-                 [-c 11] [-d Uniprot.dmnd] -o Path/to/output [-t TITLE]
+usage: pydeel.py [-h] [--version] -i Path/to/input.fasta
+                 [-c 11] [-d Uniprot.dmnd] -o Path/to/output [-n NAME]
 
 Pydeel: a tool to investigate bacterial or viral genome assembly based on
 protein lengths. Provide a fasta file and protein database as input and pydeel
