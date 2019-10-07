@@ -94,7 +94,7 @@ def parse_args(prefix):
                         required = False,
                         default = 'pydeel',
                         type = str,
-                        help = 'Prefix/name for files (default: "' + prefix + '-pydeel")')
+                        help = 'Prefix/name for files (default: "YYYYMMDD-hhmmss-pydeel")')
     parser.add_argument('-p', '--proteins',
                         metavar = 'Path/to/RefProtein.faa',
                         required = False,
@@ -111,6 +111,7 @@ def parse_args(prefix):
                         required = False,
                         action = 'store_true',
                         help = 'Continue run where last completed')
+    
 # TODO: add option to NOT output png files directory to avoid need for selenium and chromedriver
     args = parser.parse_args()
 
