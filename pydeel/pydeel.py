@@ -24,7 +24,7 @@ import logging
 import os
 import pandas
 import pkg_resources
-#import seaborn
+import seaborn
 #import selenium # doesn't need to be imported??
 import subprocess
 import sys
@@ -342,19 +342,23 @@ def plot_ratio(lengths_data, fullpath):
 
     return None
 
-# def plot_ratio_seaborn(lengths_data, fullpath):
-#     lengths_data = pandas.read_csv(lengths_data,
-#                         sep = "\t")
-#     #Draw a plot of ratios
-#     seaborn.set_style(style = "ticks")
-#     hist = seaborn.distplot(lengths_data['codingRatio'],
-#                             hist = True,
-#                             hist_kws = {"color":"red"}
-#                             )
-#
-#     fig = hist.get_figure()
-#     fig.savefig(fullpath + '-seaborn.png')
-#     return None
+def plot_ratio_seaborn(lengths_data, fullpath):
+    lengths_data = pandas.read_csv(lengths_data,
+                        sep = "\t")
+    #Draw a plot of ratios
+    seaborn.set_style(style = "ticks")
+    ratio = lengths_data[lengths_data['codingRatio'] <= 2]
+    hist = seaborn.distplot(ratio['codingRatio'],
+                            hist = True,
+                            hist_kws = {"color":"red"},
+                            kde = False,
+                            rug = True,
+                            bins = 10
+                            )
+
+    fig = hist.get_figure()
+    fig.savefig(fullpath + '-seaborn.png')
+    return None
 
 
 #TODO: Basic stats that can also be used for unit testing
@@ -493,7 +497,7 @@ def main():
         logging.info("plotting coding ratios")
         if not os.path.exists(full_outpath + '-ratioplot-genome' + '.png') or options.force == True:
             plot_ratio(pandas_file, full_outpath)
-    #    plot_ratio_seaborn(pandas_file, full_outpath)
+            plot_ratio_seaborn(pandas_file, full_outpath)
 
 
 
