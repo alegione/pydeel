@@ -399,8 +399,8 @@ def main():
     '''
     Orchestrate the execution of the program
     '''
-
-    time=datetime.datetime.now()
+    # some initial variables set
+    time = datetime.datetime.now()
     prefix = time.strftime("%Y%m%d-%H%M%S")
     options = parse_args(prefix)
     logfile = options.outdir + "/" + options.name + ".log"
@@ -449,6 +449,8 @@ def main():
             sequence = os.path.abspath(options.input)
         # check if input is a fasta file
         if is_fasta(sequence) == False:
+            # If an error is thrown here it won't work with a folder with multiple types in it?
+            # exit_with_error('The input must be in fasta format', EXIT_FASTA_FILE_ERROR)
             continue
         #TODO: check if file is FASTA or gbk and convert if necessary
 
@@ -478,7 +480,7 @@ def main():
         else:
             logging.info("%s detected, skipping data conversion", pandas_file)
 
-            # need to set up to overwrite old file if running with --force, if added to the if statement it overwrites every loop
+            # TODO need to set up to overwrite old file if running with --force, if added to the if statement it overwrites every loop
         if not os.path.exists(annotation_stats):
             logging.info("Creating statistics file")
             genome_stat_df = pandas.DataFrame([genome_stats(pandas_file, options.single, options.group)], columns = ['title', 'count_orfs', 'perfect_orfs', 'perfect_orfs_%', 'below_' + str(options.single), 'below_' + str(options.single) + '_%', 'Pass_' + str(options.group) + '_threshold', \
