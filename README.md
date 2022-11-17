@@ -33,7 +33,11 @@ pip install -U /path/to/pydeel
 ```
 pip install -U --user /path/to/pydeel
 ```
+# Dependancies
 
+Pydeel uses prodigal to rapidly annotate your genome and diamond to compare your annotated genome to a provided database, these are required to be installed locally for the tool to run successfully
++ [Diamond](https://github.com/bbuchfink/diamond)
++ [prodigal](https://github.com/hyattpd/Prodigal)
 
 # General behaviour
 
